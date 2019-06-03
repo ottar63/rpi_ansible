@@ -1,0 +1,86 @@
+---
+- hosts: docker
+  tasks:
+    - name: Add Docker key
+      shell: curl -fsSL https://download.docker.com/linux/debian/gpg |  apt-key add - && touch /opt/ansible/status/docker_key.ok
+      args: 
+        creates: /opt/ansible/status/docker_key.ok
+      become: true
+ 
+    - name: Add Docker repository
+      copy:
+        src: /opt/ansible/files/docker.list
+        dest: /etc/apt/sources.list.d/docker.list
+        owner: root
+        group: root
+        mode: 064
+      become: true
+
+    - name: Install Docker 18.06.1 
+      apt: 
+        name: 
+          - docker-ce
+          #- docker-ce-cli=18.06.1~ce~3-0~raspbian
+        update-cache: yes
+      become: true      
+
+    - name: Install Python - pip 
+      apt:
+        name: 
+          - python
+          - python-pip
+      become: true
+
+    - name: Install upgade pip to latest version
+      pip: 
+        name: pip
+        state: latest
+      become: true
+
+    - name: Install libffi-dev needed for building docker-compose
+      apt:
+        name: libffi-dev
+      become: true
+      when: ansible_hostname == "docker-master"
+
+    - name: Install docker-compose
+      pip:
+        name: docker-compose
+      when: ansible_hostname == "docker-master"
+      become: true
+
+    - name: Add user to docker group
+      user:
+        name: ottar
+        groups: docker
+        append: yes
+      become: true
+
+    - name: Copy  hosts file
+      copy:
+        src: ./files/docker-hosts
+        dest: /etc/hosts
+      become: true
+    
+- hosts: docker-master
+  tasks:
+    - name:  Create ssh key on master
+      shell: ssh-keygen -b 2048 -t rsa
+      args:
+        creates  : /home/ottar/.ssh/id_rsa
+
+    - name:  Get pub key from master
+      fetch:
+        src: /home/ottar/.ssh/id_rsa.pub
+        dest: /opt/ansible/files/rsa_key_ottar_docker_master.pub
+        flat: yes
+
+- hosts: docker:!docker-master
+  tasks:
+    - name:  add pub key for ottar to nodes
+      authorized_key:
+        user: ottar
+        state: present
+        key: "{{ lookup('file','/opt/ansible/files/rsa_key_ottar_docker_master.pub') }}"
+
+

@@ -1,0 +1,5 @@
+127.0.0.1  localhost
+
+10.12.1.51 docker-master
+10.12.1.52 docker-node1
+10.12.1.53 docker-node2
