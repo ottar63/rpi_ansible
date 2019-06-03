@@ -1,0 +1,101 @@
+---
+- hosts: docker
+  user: pi
+  tasks:
+    - name: Add user ottar 
+      user:
+        name: ottar
+        comment: Ottar Søfteland
+        groups: sudo
+        shell: /bin/bash
+        password: "$6$mysecretsalt$8.AvNg6M47drSMjGVohsvDlGep/7gqSY584PRfKp0udnW9eFsT1tIQL6TaNnmyi9qJTCIiNIirqHSjiCCUkmv/"
+      become: true
+      
+    - name: Create .ssh directory for user ottar
+      file:
+        path: /home/ottar/.ssh
+        state: directory
+        owner: ottar
+        group: ottar
+        mode: 0700
+      become: true
+
+    - name: generate ssh keys for user ottar
+      user:
+        name: ottar
+        generate_ssh_key: yes
+      when: ansible_hostname == "docker-master"
+      become: yes
+
+    - name: Copy authorized_keys for ottar
+      template:
+        src: ./files/authorized_keys
+        dest: /home/ottar/.ssh/authorized_keys
+        owner: ottar
+        group: ottar
+        mode: 0600            
+      become: true
+
+    - name: Copy sudo file
+      template:
+        src: ./files/010_ottar-nopasswd
+        dest: /etc/sudoers.d/010_ottar-nopasswd
+        owner: root
+        group: root
+        mode: 0644
+      become: true
+
+    - name: Set hostname
+      hostname:
+        name: "{{inventory_hostname}}"
+      become: true
+
+    - name:  Upgrade Raspbian
+      apt:
+        upgrade: full
+      become: yes 
+
+    - name:  Create ansible status directory
+      file:
+        path: /opt/ansible/status
+        state: directory
+        mode: 0777
+      become: true
+
+    - name: Set pi password
+      user: 
+        name: pi
+        password: "$6$mysecretsalt$qmdINmjpOOKt9dHfs5A2qbUbRO3Y6gm807Po2I5B3n9tGC4YOrZOs5c5D93M.JF6HOvIr3Dj35DZehpTpv4FF/"
+      become: true
+
+    - name: Set correct timezone
+      script: ./scripts/timezone.sh
+      args:
+        creates: /opt/ansible/status/timezone.ok
+      become: true
+    - name: Set correct keyboard
+      script: ./scripts/keyboard.sh
+      args:
+        creates: /opt/ansible/status/keyboard.ok
+      become: true
+
+    - name: Install Python packages for ansiable
+      apt:
+        name: python-apt
+      become: true
+
+    - name: Install som basic packages
+      apt:
+        name:
+        - "apt-transport-https"
+        - "ca-certificates"
+        - "software-properties-common"
+      become: true
+
+    - name:  Disable ssh password login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      become: true
+
